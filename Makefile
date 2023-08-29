@@ -11,6 +11,8 @@ all:
 
 solver:$(OBJS)
 
+solver.o : equations.o observer.o
+
 clean:
 	$(RM) *.o *.mod 
 	@# Certain systems with intel compilers generate *.i files
