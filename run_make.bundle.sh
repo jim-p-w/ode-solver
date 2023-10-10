@@ -30,10 +30,10 @@ MODULES_POST_CC=""
 MODULES=""
 
 # vars for creating the batch script
-PRECISION="single"
 EXEC=""
 DEFAULT_EXEC="make"
 SOURCE_MODULES=""
+NTHREADS=8
 
 # vars for controlling this script
 RUN=""
@@ -66,17 +66,17 @@ export GFORTRAN_CONVERT_UNIT='big_endian:101-200'
 usage()
 {
 	echo "usage: $0 -A account [-N name] [-q queue]"
-	echo "  [-x make|ctest|echo] [-c compiler] [-p precision] [-f job-file] [-d] [-h]"
+	echo "  [-x make|ctest|echo] [-t threads] [-c compiler] [-f job-file] [-n] [-h]"
 	echo
 	echo "  account is the HPC account number"
 	echo "  name is a name for the job, default is $NAME"
 	echo "  queue is one of [ ${QUEUE_OPTS[@]} ], default is $QUEUE"
 	echo "  -x to specify what to run, default is $DEFAULT_EXEC"
 	echo "      use echo to submit a job which only sets the environment (for testing)"
+	echo "  threads is the number of threads to run, default is $NTHREADS"
 	echo "  compiler is one of [ $DERECHO_CC $CHEYENNE_CC ], default is $COMPILER"
-	echo "  precision is one of [ single double ], default is $PRECISION"
 	echo "  job file is the file to be created and submitted to a compute node, default is $JOB_FILE"
-	echo "  -d: don't submit the job to a compute node"
+	echo "  -n: don't submit the job to a compute node, only create the batch file"
 	echo "  -h: print help and exit"
 	exit
 }
@@ -118,18 +118,18 @@ if [ $# == 0 ]; then
 fi
 
 # get comamnd line args
-while getopts A:x:q:c:p:N:f:dh flag
+while getopts A:x:q:c:N:f:t:nh flag
 do
 	case "${flag}" in
 		A) ACCOUNT=${OPTARG};;
 		q) QUEUE="-q ${OPTARG}";;
 		c) COMPILER=${OPTARG};;
-		p) PRECISION=${OPTARG};;
 		N) NAME=${OPTARG};;
 		f) JOB_FILE=${OPTARG};;
 		x) DEFAULT_EXEC=${OPTARG};;
-		d) RUN="echo";;
-		h) HELP="help"
+		t) NTHREADS=${OPTARG};;
+		n) RUN="echo";;
+		h) HELP="help";;
 	esac
 done
 
@@ -181,7 +181,7 @@ if [ -f "$JOB_FILE" ]; then
 fi
 
 if [ "$DEFAULT_EXEC" == "make" ]; then
-	EXEC="$DEFAULT_EXEC -j8"
+	EXEC="$DEFAULT_EXEC -j$NTHREADS"
 elif [ "$DEFAULT_EXEC" == "ctest" ]; then
 	EXEC="export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH && cd mpas-jedi && ctest"
 elif [ "$DEFAULT_EXEC" == "echo" ]; then
@@ -202,14 +202,15 @@ cat > $JOB_FILE << EOF
 #PBS -l walltime=01:00:00
 #PBS -j oe
 #PBS -k eod
-#--- only need 8 cpus to compile
-#PBS -l select=1:ncpus=8
+#--- get 1 cpu per thread
+#PBS -l select=1:ncpus=$NTHREADS
 #--- 
 #PBS -N $NAME
 #PBS -A $ACCOUNT
 #PBS $QUEUE
 
 date
+echo Old modules
 module list
 
 $SOURCE_MODULES
